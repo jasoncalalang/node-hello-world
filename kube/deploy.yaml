@@ -16,7 +16,8 @@ spec:
     spec:
       containers:
       - name: hello-world
-        image: jasoncalalang/node-hello-world:latest
+        image: jp.icr.io/jason-05192025/node-hello-world:10
+        imagePullPolicy: Always
         ports:
         - containerPort: 3000
         env:
