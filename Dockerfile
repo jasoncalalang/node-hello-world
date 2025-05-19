@@ -1,8 +1,31 @@
-FROM node:22
-
+###############################################################################
+# ── Build stage ── (full Debian image with compilers & libc-dev)        #
+###############################################################################
+FROM node:22-bullseye AS builder          # 400 + MB image, but only temporary 📦
 WORKDIR /app
+
+# copy lock files first to leverage Docker cache
 COPY package*.json ./
-RUN npm install
+
+# install ONLY prod dependencies – no dev/test tooling is kept ⤵︎
+RUN npm ci --omit=dev                     # faster + smaller than "npm install"
+
+# bring the rest of the source and (optionally) compile / transpile
 COPY . .
+# RUN npm run build                       # include if you have a build step
+
+###############################################################################
+# ── Runtime stage ── (minimal Alpine image)                             #
+###############################################################################
+FROM node:22-alpine3.21                   # ~70 MB image, runs in prod
+WORKDIR /app
+
+# copy the application *without* dev deps or build artifacts we don’t need
+COPY --from=builder /app .
+
+# helpful defaults for prod Node apps
+ENV NODE_ENV=production \
+    PORT=3000
+
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["npm","start"]
