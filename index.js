@@ -2,7 +2,8 @@ const express = require('express');
 const app = express();
 
 app.get('/', (req, res) => {
-  res.send('Hello World!');
+  res.setHeader('Content-Type', 'application/json');
+  res.json({ message: 'Hello World!' });
 });
 
 app.listen(3000, () => {
