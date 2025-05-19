@@ -1,0 +1,113 @@
+###############################################################################
+# A handful of parameters that every PipelineRun will receive
+###############################################################################
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: build-push-deploy
+spec:
+  workspaces:
+  - name: source
+  params:
+  - name: IMAGE_NAME                # jp.icr.io/<namespace>/node-hello-world
+  - name: REGISTRY_NAMESPACE        # <your-icr-namespace>
+  - name: CLUSTER_NAME              # IKS cluster name or ID
+  tasks:
+  - name: build-push
+    taskRef:                        # comes from the Open-Toolchain Tekton catalog
+      name: icr-containerize        # builds with BuildKit & pushes to ICR :contentReference[oaicite:0]{index=0}
+      kind: ClusterTask
+    params:
+    - name: image
+      value: $(params.IMAGE_NAME)
+    - name: registryNamespace
+      value: $(params.REGISTRY_NAMESPACE)
+    - name: dockerfile
+      value: Dockerfile
+    workspaces:
+    - name: workspace
+      workspace: source
+
+  - name: deploy
+    taskRef:
+      name: iks-deploy-to-kubernetes   # wraps ibmcloud ks + kubectl :contentReference[oaicite:1]{index=1}
+      kind: ClusterTask
+    runAfter: [build-push]
+    params:
+    - name: cluster
+      value: $(params.CLUSTER_NAME)
+    - name: manifestFiles
+      value: k8s/deployment.yaml
+    - name: image
+      value: $(params.IMAGE_NAME)
+    workspaces:
+    - name: workspace
+      workspace: source
+
+###############################################################################
+# TriggerBinding — pulls values out of GitHub push web-hook payload
+###############################################################################
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: github-push-binding
+spec:
+  params:
+  - name: gitrevision
+    value: $(body.head_commit.id)
+  - name: gitbranch
+    value: $(body.ref)
+  - name: giturl
+    value: $(body.repository.clone_url)
+
+###############################################################################
+# TriggerTemplate — converts the payload into a PipelineRun
+###############################################################################
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: build-deploy-template
+spec:
+  params:
+  - name: gitrevision
+  - name: gitbranch
+  - name: giturl
+  resourcetemplates:
+  - apiVersion: tekton.dev/v1beta1
+    kind: PipelineRun
+    metadata:
+      generateName: node-hello-world–
+    spec:
+      pipelineRef:
+        name: build-push-deploy
+      params:
+      - name: IMAGE_NAME             # reuse pipeline-level properties
+        value: $(properties.IMAGE_NAME)
+      - name: REGISTRY_NAMESPACE
+        value: $(properties.REGISTRY_NAMESPACE)
+      - name: CLUSTER_NAME
+        value: $(properties.CLUSTER_NAME)
+      workspaces:
+      - name: source
+        git:
+          url: $(tt.params.giturl)
+          revision: $(tt.params.gitrevision)
+
+###############################################################################
+# EventListener — exposes the webhook endpoint GitHub will call
+###############################################################################
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: el-github-push
+spec:
+  serviceAccountName: pipeline        # default SA on IBM CD workers
+  triggers:
+  - name: on-push
+    bindings:
+    - ref: github-push-binding
+    template:
+      ref: build-deploy-template
