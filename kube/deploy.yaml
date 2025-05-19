@@ -5,7 +5,7 @@ metadata:
   labels:
     app: hello-world
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: hello-world
@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: hello-world
-        image: jp.icr.io/jason-05192025/node-hello-world:latest
+        image: jasoncalalang/node-hello-world:latest
         ports:
         - containerPort: 3000
         env:
