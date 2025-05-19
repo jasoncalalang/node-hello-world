@@ -1,7 +1,7 @@
 ###############################################################################
 # ── Build stage ── (full Debian image with compilers & libc-dev)        #
 ###############################################################################
-FROM node:22-bullseye AS builder          # 400 + MB image, but only temporary 📦
+FROM node:22-alpine3.21 AS builder 
 WORKDIR /app
 
 # copy lock files first to leverage Docker cache
@@ -17,7 +17,7 @@ COPY . .
 ###############################################################################
 # ── Runtime stage ── (minimal Alpine image)                             #
 ###############################################################################
-FROM node:22-alpine3.21                   # ~70 MB image, runs in prod
+FROM node:22-alpine3.21
 WORKDIR /app
 
 # copy the application *without* dev deps or build artifacts we don’t need
